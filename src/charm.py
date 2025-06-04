@@ -25,7 +25,7 @@ from ops import (
     main,
 )
 from pydantic import ValidationError
-from cassandra_client.cassandra_cql import CassandraClient
+from common.client import CassandraClient
 
 from charms.data_platform_libs.v0.data_models import TypedCharmBase
 from charms.operator_libs_linux.v2 import snap
@@ -50,7 +50,7 @@ class CassandraOperatorCharm(TypedCharmBase[CharmConfig]):
         framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.debug_connection_action, self._on_debug_connection_action)
 
-        self.cassandra_client = CassandraClient(host_list=["127.0.0.1"])
+        self.cassandra_client = CassandraClient(host="127.0.0.1")
         
     def _on_start(self, event: StartEvent) -> None:
         self.unit.status = MaintenanceStatus("Starting Cassandra daemon")
@@ -220,33 +220,27 @@ class CassandraOperatorCharm(TypedCharmBase[CharmConfig]):
 
         with open(path, 'w') as f:
             f.write(new_content)
-
+            
 
     def _on_debug_connection_action(self, event: ActionEvent) -> None:
-        keyspace = self._create_test_keyspace()
-        table = self._create_test_table()        
-        event.set_results({
-            "keyspace-created": keyspace,
-            "table-crated": table,
-        })
-            
-    def _create_test_keyspace(self) -> bool:
+        created = False
+        message = ""
         try:
           self.cassandra_client.create_keyspace("test_keyspace")
-        except Exception as e:
-            logger.error(f"Failed to create test keyspace: {e}")
-            return False
-        return True
-            
-    def _create_test_table(self) -> bool:
-        try:        
-            self.cassandra_client.create_table("test_keyspace", "test_table")
-        except Exception as e:
-            logger.error(f"Failed to create test table: {e}")
-            return False
-        return True
         
-
-
+          if "test_keyspace" not in self.cassandra_client.get_keyspace_list():
+              created = True
+          else:
+              created = False
+              message = f"Failed to find created keyspace"
+        except Exception as e:
+            message = f"Failed to create keyspace: {e}"
+            logger.error(message)
+            
+        event.set_results({
+            "Ok": created,
+            "message": message,
+        })
+            
 if __name__ == "__main__":  # pragma: nocover
     main(CassandraOperatorCharm)

@@ -9,6 +9,8 @@ charm-libs:
     version: "2"
   - lib: data_platform_libs.data_models
     version: "0"    
+  - lib: data_platform_libs.data_interfaces
+    version: "0"    
 parts:
   # "poetry-deps" part name is a magic constant
   # https://github.com/canonical/craft-parts/pull/901

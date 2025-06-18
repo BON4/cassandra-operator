@@ -33,9 +33,11 @@ class CassandraWorkload(WorkloadBase):
     def install(self) -> None:
         """Install the cassandra snap."""
         logger.debug("Installing & configuring Cassandra snap")
-        snap.install_local("charmed-cassandra_5.0.4_amd64.snap", devmode=True)
+        snap.install_local("charmed-cassandra_5.0.4_amd64.snap", dangerous=True)
         self._cassandra.connect("process-control")
         self._cassandra.connect("system-observe")
+        self._cassandra.connect("mount-observe")
+        self._cassandra.connect("hardware-observe")        
 
     @override
     def alive(self) -> bool:

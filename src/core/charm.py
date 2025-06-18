@@ -15,6 +15,7 @@ from common.workload import WorkloadBase
 from core.state import ApplicationState
 from managers.cluster import ClusterManager
 from managers.config import ConfigManager
+from managers.tls import TLSManager
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,11 @@ class CassandraCharmBase(TypedCharmBase[CharmConfig]):
         self.cluster_manager = ClusterManager(state=self.state, workload=self.workload)
         self.config_manager = ConfigManager(workload=self.workload)
 
+        self.tls_manager = TLSManager(state=self.state, workload=self.workload)
+
         self.framework.observe(self.on.collect_unit_status, self._on_collect_unit_status)
         self.framework.observe(self.on.collect_app_status, self._on_collect_app_status)
-
+        
     def _on_collect_unit_status(self, event: CollectStatusEvent) -> None:
         event.add_status(Status.ACTIVE.value)
 

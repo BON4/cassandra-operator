@@ -4,8 +4,10 @@
 
 """Charm config definition."""
 
+from typing import Optional
 from charms.data_platform_libs.v0.data_models import BaseConfigModel
 from pydantic import field_validator
+from pydantic import Field
 
 
 class CharmConfig(BaseConfigModel):
@@ -13,6 +15,8 @@ class CharmConfig(BaseConfigModel):
 
     profile: str
     cluster_name: str
+    tls_client_private_key: Optional[str] = Field(default=None)
+    tls_peer_private_key: Optional[str] = Field(default=None)
 
     @field_validator("profile")
     @classmethod
@@ -26,8 +30,26 @@ class CharmConfig(BaseConfigModel):
     @field_validator("cluster_name")
     @classmethod
     def cluster_name_values(cls, value: str) -> str:
-        """TODO."""
         if len(value) == 0:
             raise ValueError("cluster_name cannot be empty")
+        
+        return value
+
+    @field_validator("tls_client_private_key")
+    @classmethod
+    def tls_client_private_key_values(cls, value: str) -> Optional[str]:
+        """TODO."""
+        if len(value) == 0 or value == "null":
+            return None
 
         return value
+
+    @field_validator("tls_peer_private_key")
+    @classmethod
+    def tls_peer_private_key_values(cls, value: str) -> Optional[str]:
+        """TODO."""
+        if len(value) == 0 or value == "null":
+            return None
+
+        return value
+    

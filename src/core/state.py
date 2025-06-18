@@ -18,6 +18,7 @@ from common.literals import (
     CLIENT_PORT,
     PEER_PORT,
     PEER_RELATION,
+    TLSState,
 )
 
 logger = logging.getLogger(__name__)
@@ -124,8 +125,39 @@ class UnitContext(RelationState):
     @workload_state.setter
     def workload_state(self, value: str) -> None:
         self._field_setter_wrapper("workload_state", value)
+        
+    @property
+    def tls_client_state(self) -> TLSState:
+        """TODO."""
+        return TLSState(self.relation_data.get("tls_client_state", TLSState.NO_TLS.value))
 
+    @tls_client_state.setter
+    def tls_client_state(self, value: str) -> None:
+        """TODO."""
+        self._field_setter_wrapper("tls_client_state", value)
 
+    @property
+    def tls_peer_state(self) -> TLSState:
+        """TODO."""
+        return TLSState(self.relation_data.get("tls_peer_state", TLSState.NO_TLS.value))
+
+    @tls_peer_state.setter
+    def tls_peer_state(self, value: str) -> None:
+        """TODO."""
+        self._field_setter_wrapper("tls_peer_state", value)
+
+        
+    @property
+    def tls_client_cert_ready(self) -> TLSState:
+        """TODO."""
+        return TLSState(self.relation_data.get("tls_client_cert_ready", "false"))
+        
+
+    @tls_client_cert_ready.setter
+    def tls_client_cert_ready(self, value: bool) -> None:
+        """TODO."""
+        self._field_setter_wrapper("tls_client_cert_ready", str(value))
+        
 class ClusterContext(RelationState):
     """State/Relation data collection for the cassandra application."""
 

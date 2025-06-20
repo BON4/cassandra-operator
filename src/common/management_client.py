@@ -5,7 +5,7 @@
 """TODO."""
 
 import logging
-from typing import Literal
+from typing import Literal, Optional
 
 import requests
 from requests import ConnectionError, HTTPError
@@ -24,11 +24,23 @@ class ManagementClient:
     ):
         self.base_url = base_url
 
-    def _request(self, method: Literal["GET"], endpoint: str) -> str:
+    def _request(
+        self,
+        method: Literal["GET", "POST"],
+        endpoint: str,
+        data: Optional[dict] = None,
+        json: Optional[dict] = None,
+    ) -> str:
+        logger.debug(f"{method} {self.base_url}{endpoint} | Request")
         response = requests.request(
-            method=method, url=f"{self.base_url}{endpoint}", timeout=_TIMEOUT
+            method=method,
+            url=f"{self.base_url}{endpoint}",
+            timeout=_TIMEOUT,
+            data=data,
+            json=json,
         )
         response.raise_for_status()
+        logger.debug(f"{method} {self.base_url}{endpoint} | Response")
         return response.content.decode()
 
     def is_healthy(self) -> bool:
@@ -44,3 +56,12 @@ class ManagementClient:
             return False
 
         return True
+
+    def reload_truststore(self) -> bool:
+        try:
+            self._request("POST", "ops/node/encryption/internode/truststore/reload")
+        except (HTTPError, ConnectionError):
+            return False
+
+        return True
+        

@@ -1,0 +1,6 @@
+upload-client-certificate:
+  description: Upload certificate file
+  params:
+    certificate:
+      type: string
+      description: Certificate content in PEM format

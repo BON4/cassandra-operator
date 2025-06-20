@@ -89,7 +89,7 @@ class CassandraWorkload(WorkloadBase):
         return False
 
     @override
-    def exec(self, command: list[str]) -> tuple[str, str]:
+    def exec(self, command: list[str], cwd: str | None = None) -> tuple[str, str]:
         try:
             result = subprocess.run(
                 command,
@@ -97,6 +97,7 @@ class CassandraWorkload(WorkloadBase):
                 text=True,
                 capture_output=True,
                 timeout=10,
+                cwd=cwd,
             )
             stdout = result.stdout.strip()
             stderr = result.stderr.strip()

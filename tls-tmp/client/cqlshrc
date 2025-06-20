@@ -1,0 +1,9 @@
+[connection]
+hostname = 10.145.156.140
+port = 9042
+
+[ssl]
+certfile = /home/bon/repos/cassandra-operator/tls-tmp/client/ca.crt
+validate = true
+userkey = /home/bon/repos/cassandra-operator/tls-tmp/client/client_private.key
+usercert = /home/bon/repos/cassandra-operator/tls-tmp/client/client.pem

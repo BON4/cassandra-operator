@@ -13,11 +13,7 @@ peers:
     interface: cassandra_peers
 
 requires:
-  peer-certificates:
-    interface: tls-certificates
-    limit: 1
-    optional: true
-  client-certificates:
+  certificates:
     interface: tls-certificates
     limit: 1
     optional: true

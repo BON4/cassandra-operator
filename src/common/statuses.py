@@ -27,6 +27,7 @@ class Status(Enum):
     STARTING = MaintenanceStatus("waiting for Cassandra to start")
     INVALID_CONFIG = BlockedStatus("invalid config")
 
+    TLS_NOT_INSTALLED = BlockedStatus("TLS is not set up")
 
     TLS_INVALID_PRIVATE_KEY = StatusLevel(
         BlockedStatus("The private key provided is not valid. Please provide a valid private key"),

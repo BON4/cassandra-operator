@@ -16,7 +16,7 @@ from ops import (
 )
 from pydantic import ValidationError
 
-from common.literals import ClusterState, UnitWorkloadState
+from common.literals import ClusterState, TLSState, UnitWorkloadState
 from common.statuses import Status
 from core.charm import CassandraCharmBase
 
@@ -80,6 +80,13 @@ class CassandraEvents(Object):
             self.charm.config
         except ValidationError:
             event.add_status(Status.INVALID_CONFIG.value)
+
+        if (
+            self.charm.config.tls_enabled and 
+            self.charm.state.unit.tls_state != TLSState.TLS
+        ):
+           event.add_status(Status.TLS_NOT_INSTALLED.value)
+            
 
         if self.charm.state.unit.workload_state == "":
             event.add_status(Status.INSTALLING.value)

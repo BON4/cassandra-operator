@@ -5,6 +5,8 @@
 """TODO."""
 
 import logging
+import json
+from typing import List, Optional
 
 from charms.data_platform_libs.v0.data_interfaces import (
     Data,
@@ -12,6 +14,13 @@ from charms.data_platform_libs.v0.data_interfaces import (
     DataPeerOtherUnitData,
     DataPeerUnitData,
 )
+
+from charms.tls_certificates_interface.v4.tls_certificates import (
+    Certificate,
+    CertificateSigningRequest,
+    PrivateKey,
+)
+
 from ops import Application, CharmBase, Object, Relation, Unit
 
 from common.literals import (
@@ -127,37 +136,95 @@ class UnitContext(RelationState):
         self._field_setter_wrapper("workload_state", value)
         
     @property
-    def tls_client_state(self) -> TLSState:
+    def tls_state(self) -> TLSState:
         """TODO."""
-        return TLSState(self.relation_data.get("tls_client_state", TLSState.NO_TLS.value))
+        return TLSState(self.relation_data.get("tls_state", TLSState.NO_TLS.value))
 
-    @tls_client_state.setter
-    def tls_client_state(self, value: str) -> None:
+    @tls_state.setter
+    def tls_state(self, value: str) -> None:
         """TODO."""
-        self._field_setter_wrapper("tls_client_state", value)
+        self._field_setter_wrapper("tls_state", value)
 
     @property
-    def tls_peer_state(self) -> TLSState:
+    def tls_cert_ready(self) -> bool:
         """TODO."""
-        return TLSState(self.relation_data.get("tls_peer_state", TLSState.NO_TLS.value))
+        return bool(self.relation_data.get("tls_cert_ready", ""))
+        
 
-    @tls_peer_state.setter
-    def tls_peer_state(self, value: str) -> None:
+    @tls_cert_ready.setter
+    def tls_cert_ready(self, value: bool) -> None:
         """TODO."""
-        self._field_setter_wrapper("tls_peer_state", value)
+        self._field_setter_wrapper("tls_cert_ready", str(value) if value else "")
 
+    # ---- TLS ----
+    
+    @property
+    def private_key(self) -> Optional[PrivateKey]:
+        """The unit private-key set during `certificates_joined."""
+        raw = self.relation_data.get("private_key", "")
+        if not raw:
+            return None
+        return PrivateKey.from_string(raw)
+
+    @private_key.setter
+    def private_key(self, value: PrivateKey) -> None:
+        """TODO."""
+        self._field_setter_wrapper("private_key", str(value))
+
+    @property
+    def csr(self) -> Optional[CertificateSigningRequest]:
+        """The unit cert signing request."""
+        raw = self.relation_data.get("csr", "")
+        if not raw:
+            return None
+        return CertificateSigningRequest.from_string(raw)
+
+    @csr.setter
+    def csr(self, value: CertificateSigningRequest) -> None:
+        """TODO."""
+        self._field_setter_wrapper("csr", str(value))
+
+    @property
+    def certificate(self) -> Optional[Certificate]:
+        """The signed unit certificate from the provider relation."""
+        raw = self.relation_data.get("certificate", "")
+        if not raw:
+            return None
+        return Certificate.from_string(raw)
+        
+
+    @certificate.setter
+    def certificate(self, value: Certificate) -> None:
+        """TODO."""
+        self._field_setter_wrapper("certificate", str(value))
+
+    @property
+    def ca(self) -> Optional[Certificate]:
+        """The ca used to sign unit cert."""
+        raw = self.relation_data.get("ca", "")
+        if not raw:
+            return None
+        
+        return Certificate.from_string(raw)
+
+    @ca.setter
+    def ca(self, value: Certificate) -> None:
+        """TODO."""
+        self._field_setter_wrapper("ca", str(value))
         
     @property
-    def tls_client_cert_ready(self) -> TLSState:
-        """TODO."""
-        return TLSState(self.relation_data.get("tls_client_cert_ready", "false"))
-        
-
-    @tls_client_cert_ready.setter
-    def tls_client_cert_ready(self, value: bool) -> None:
-        """TODO."""
-        self._field_setter_wrapper("tls_client_cert_ready", str(value))
-        
+    def chain(self) -> List[Certificate]:
+        """The chain used to sign the unit cert."""
+        raw = self.relation_data.get("chain")
+        if not raw:
+            return []
+        return [Certificate.from_string(c) for c in json.loads(raw)]
+    
+    @chain.setter
+    def chain(self, value: List[Certificate]) -> None:
+        """Sets the chain used to sign the unit cert."""
+        self._field_setter_wrapper("chain", json.dumps([str(c) for c in value]))
+            
 class ClusterContext(RelationState):
     """State/Relation data collection for the cassandra application."""
 

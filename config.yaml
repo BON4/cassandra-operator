@@ -11,12 +11,7 @@ options:
     type: string
     default: Test Cluster
 
-  tls-peer-private-key:
+  tls-private-key:
     type: secret
     description: |
       A Juju secret URI of a secret containing the private key for peer-to-peer TLS certificates.
-  
-  tls-client-private-key:
-    type: secret
-    description: |
-      A Juju secret URI of a secret containing the private key for client-to-server TLS certificates.

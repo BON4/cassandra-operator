@@ -1,0 +1,18 @@
+juju add-secret tls-private-key private-key=$(base64 -w0 private.key)
+
+juju grant-secret tls-private-key cassandra
+juju config cassandra tls-private-key=secret:
+juju integrate self-signed-certificates:certificates cassandra:certificates
+
+
+client
+
+openssl genrsa -out client_private.key 2048
+openssl req -new -key client_private.key -out client.csr -subj "/C=UA/ST=Dnipropetrovsk/L=Dnipro/O=YourOrganization/OU=IT/CN=cassandra-client"
+
+juju run self-signed-certificates/0 get-ca-certificate --format yaml | yq e '.self-signed-certificates/0.results.ca-certificate' > ca.crt
+
+openssl x509 -req -in client.csr -CA ca.crt -CAkey private.key -CAcreateserial -out client.pem -days 365
+
+
+

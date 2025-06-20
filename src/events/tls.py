@@ -6,9 +6,11 @@
 
 import base64
 import logging
+from pathlib import Path
 import re
+import tempfile
 
-from ops import RelationCreatedEvent
+from ops import ActionEvent, RelationCreatedEvent, RelationJoinedEvent
 
 from charms.tls_certificates_interface.v4.tls_certificates import (
     CertificateAvailableEvent,
@@ -21,7 +23,7 @@ from ops.framework import EventBase, Object, EventSource
 from ops.model import ModelError, SecretNotFoundError
 
 
-from common.literals import CLIENT_TLS_RELATION_NAME, PEER_TLS_RELATION_NAME, ClusterState, TLSState, TLSType
+from common.literals import TLS_RELATION_NAME, ClusterState, TLSState, TLSType
 from common.secrets import get_secret_from_id
 from common.statuses import Status
 from core.charm import CassandraCharmBase
@@ -36,63 +38,36 @@ class TLSEvents(Object):
         super().__init__(charm, "tls")
         self.charm = charm
         host_mapping = self.charm.cluster_manager.get_host_mapping()
-        common_name = f"{self.charm.unit.name}-{self.charm.model.uuid}"
-        client_private_key = None
-        peer_private_key = None
+        peer_tls_common_name = f"{self.charm.unit.name}-{self.charm.model.uuid}"
 
-        if client_private_key_id := self.charm.config.tls_client_private_key:
-            if (
-                client_private_key := self.read_and_validate_private_key(client_private_key_id)
-            ) is None:
-                # TODO: add cluster state error Status.TLS_INVALID_PRIVATE_KEY
-                raise Exception("invalid client private key")
-
-        if peer_private_key_id := self.charm.config.tls_peer_private_key:
-            if (
-                peer_private_key := self.read_and_validate_private_key(peer_private_key_id)
-            ) is None:
-                # TODO: add cluster state error Status.TLS_INVALID_PRIVATE_KEY
-                raise Exception("invalid peer private key")
-
-            
-        self.client_certificate = TLSCertificatesRequiresV4(
+        self.requier = TLSCertificatesRequiresV4(
             self.charm,
-            CLIENT_TLS_RELATION_NAME,
+            TLS_RELATION_NAME,
             certificate_requests=[
                 CertificateRequestAttributes(
-                    common_name=common_name,
-                    sans_ip=frozenset({host_mapping["ip"]}),
-                    sans_dns=frozenset({self.charm.unit.name, host_mapping["hostname"]}),
-                    organization=TLSType.CLIENT.value,
-                ),
-            ],
-            private_key=client_private_key,
-        )
-
-        self.peer_certificate = TLSCertificatesRequiresV4(
-            self.charm,
-            PEER_TLS_RELATION_NAME,
-            certificate_requests=[
-                CertificateRequestAttributes(
-                    common_name=common_name,
+                    common_name=peer_tls_common_name,
                     sans_ip=frozenset({host_mapping["ip"]}),
                     sans_dns=frozenset({self.charm.unit.name, host_mapping["hostname"]}),
                     organization=TLSType.PEER.value,
                 ),
             ],
-            private_key=peer_private_key,
         )
 
-        
-        for relation in [self.peer_certificate,self.client_certificate]:
-            self.framework.observe(
-                relation.on.certificate_available, self._on_certificate_available
-            )
-        
-        for relation in [PEER_TLS_RELATION_NAME,CLIENT_TLS_RELATION_NAME]:
-            self.framework.observe(
-                self.charm.on[relation].relation_created, self._on_relation_created
-            )
+        self.framework.observe(
+            self.requier.on.certificate_available, self._on_certificate_available
+        )
+            
+        self.framework.observe(
+            self.charm.on[TLS_RELATION_NAME].relation_created, self._on_relation_created
+        )
+
+        self.framework.observe(
+            self.charm.on[TLS_RELATION_NAME].relation_joined, self._on_relation_joined
+        )
+
+        self.framework.observe(
+            self.charm.on.upload_client_certificate_action, self._on_upload_client_certificate
+        )
 
     def _on_relation_created(self, event: RelationCreatedEvent) -> None:
         """Handle the `relation-created` event.
@@ -100,11 +75,22 @@ class TLSEvents(Object):
         Args:
             event (RelationCreatedEvent): The event object.
         """
-        if event.relation.name == CLIENT_TLS_RELATION_NAME:
-            self.charm.tls_manager.set_tls_state(state=TLSState.TO_TLS, tls_type=TLSType.CLIENT)
-        elif event.relation.name == PEER_TLS_RELATION_NAME:
-            self.charm.tls_manager.set_tls_state(state=TLSState.TO_TLS, tls_type=TLSType.PEER)
+        if not self.charm.unit.is_leader():
+            return
+        self.charm.tls_manager.set_tls_state(state=TLSState.TO_TLS)
 
+    def _on_relation_joined(self, event: RelationJoinedEvent) -> None:
+        """Handle the `relation-created` event.
+
+        Args:
+            event (RelationCreatedEvent): The event object.
+        """
+        if not self.charm.state.unit.is_started:
+            event.defer()
+            return
+
+        self.charm.tls_manager.set_tls_state(state=TLSState.TO_TLS)
+        
     def _on_certificate_available(self, event: CertificateAvailableEvent) -> None:  # noqa: C901
         """Handle the `certificates-available` event.
 
@@ -115,27 +101,32 @@ class TLSEvents(Object):
         cert_type = TLSType(cert.organization)
         logger.debug(f"Received certificate for {cert_type}")
 
-        relation_requirer = (
-            self.peer_certificate if cert_type == TLSType.PEER else self.client_certificate
-        )
-
         # cert contains t.pem, t_ca.pem
         # private_key contains t.key
         # t_ca.pem - is rootCa. It is the same across client-certificates and peer-certificates
-        certs, private_key = relation_requirer.get_assigned_certificates()
+
+        certs, private_key = self.requier.get_assigned_certificates()
         cert = certs[0]
 
         if private_key is None:
             logger.error("private key is None")
             return
-
-        logger.debug(f"---------- CERT ----------\n {cert.to_json()}")
-        logger.debug(f"---------- PKEY ----------\n {private_key.raw}")        
-
-        # add t_ca.pem to truststore and node keystore
-        # add t_ca.pem 
-
         
+        self.charm.state.unit.certificate = cert.certificate
+        self.charm.state.unit.csr = cert.certificate_signing_request
+        self.charm.state.unit.ca = cert.ca
+        self.charm.state.unit.chain = cert.chain
+        self.charm.state.unit.private_key = private_key
+
+        self.charm.tls_manager.set_ca()
+        self.charm.tls_manager.set_certificate()
+        self.charm.tls_manager.set_private_key()
+        self.charm.tls_manager.set_keystore()
+        self.charm.tls_manager.set_truststore()
+
+        self.charm.state.unit.tls_cert_ready = True
+
+        self.charm.on.config_changed.emit()
         
     def read_and_validate_private_key(
         self, private_key_secret_id: str | None
@@ -176,4 +167,38 @@ class TLSEvents(Object):
             return None
 
         return private_key
+
+    def _on_upload_client_certificate(self, event: ActionEvent) -> None:
+        client_cert = event.params.get("certificate")
+        if not client_cert:
+            logger.warning("no client certificate was provided on upload-client-certificate action")
+            return
+    
+        fingerprint = self.charm.tls_manager.certificate_fingerprint(client_cert)
+    
+        trusted = self.charm.tls_manager.trusted_certificates
+        if fingerprint in trusted.values():
+            logger.info("Client certificate already trusted. Skipping.")
+            return
         
+        with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".pem") as tmp:
+            tmp.write(client_cert)
+            tmp.flush()
+            cert_path = Path(tmp.name)
+
+        alias = f"client-{hash(fingerprint) & 0xFFFFFFFF}"
+        try:
+            self.charm.tls_manager.import_truststore(alias, str(cert_path))
+            logger.info(f"Successfully imported client cert into truststore with alias {alias}")
+        except Exception as e:
+            logger.error(f"Failed to import client certificate: {e}")
+            event.fail(f"Could not import client certificate: {str(e)}")
+        finally:
+            try:
+                cert_path.unlink()
+                logger.debug(f"Temporary certificate file {cert_path} deleted.")
+            except Exception as e:
+                logger.warning(f"Could not delete temporary certificate file {cert_path}: {e}")
+
+        
+    
